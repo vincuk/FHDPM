@@ -1,3 +1,5 @@
+import numpy as np
+
 from constants import o_range
 from parameters import JOBS
 
@@ -14,3 +16,10 @@ def map_to_index(pp, j, o):
     else:
         _o = 0            
     return pp*( len(o_range)*JOBS ) + j*len(o_range) + _o
+    
+    
+def augm(a):
+    x = []
+    for i in range(1, len(a)):
+        x.append(a[i] - a[i-1])
+    return np.array(x)
