@@ -1,6 +1,5 @@
 import numpy as np
-
-from constants import ZSHOCKS
+from python.constants import ZSHOCKS
 
 # Probability of having PP given the job choice
 PPDDISTRIBUTION = [
