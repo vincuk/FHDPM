@@ -136,12 +136,11 @@ class Model:
         :param bool o: True = changed job, False = kept job
         :param int z_shock: z-shock index
         '''
-        _h_old = max(self.HMIN, 2*h - h_prime)
         if h == self.HMAX:
-            _h = 0.75*self.AUGMH
+            _h = 0.5*self.AUGMH
         else:
             _h = h_prime - h
-        return self.wage(j, pp, _h, _h_old, o, z_shock_range[z_shock])
+        return self.wage(j, pp, _h, h, o, z_shock_range[z_shock])
 
     def grid_consumption(self, j, pp, h_prime, h, a_prime, a, o, z_shock):
         '''
@@ -175,7 +174,7 @@ class Model:
         :param float c: consumption on grid
         :param float l: labor supply on grid
         '''
-        return self.CHI*(c**(1-self.IOTA))/(1-self.IOTA) - \
+        return self.CHI*(c**(1-self.IOTA))/(1-self.IOTA) / 400 - \
                (1 - self.CHI)*(l**(1+self.PSI))/(1+self.PSI)
         
         
@@ -191,7 +190,7 @@ class Model:
                         if h_end < h_start or h_end - h_start > self.AUGMH:
                             continue
                         for a_end in self.a_grid:
-                            if a_end - a_start > self.AUGMA:
+                            if a_start - a_end > self.AUGMA:
                                 continue
                             _c = self.grid_consumption(j, pp, h_end, h_start, 
                                                  a_end, a_start, o, z_shock);
