@@ -1,6 +1,3 @@
-import numpy as np
-from python.constants import ZSHOCKS
-
 # Probability of having PP given the job choice
 PPDDISTRIBUTION = [
 [0.2261905, 0.2857143, 0.2027027, 0.3817272, 0.2078767, 0.3080275, 0.4244343, 0.1842816, 0.3720966, 0.4858804, 0.5218593,
@@ -22,11 +19,6 @@ PPDDISTRIBUTION = [
 [0.2486264, 0.4194631, 0.3417533, 0.3603083, 0.2315789, 0.3566465, 0.2206676, 0.3615312, 0.5033089, 0.4615174, 0.5123493, 
 0.6075004, 0.6454838, 0.7500589, 0.6393598, 0.5575300, 0.6021262, 0.5947722, 0.5161463, 0.5989467, 0.4467263, 0.5667175]
 ]
-
-# Transition matrix of discrete earnings shocks
-PIMATRIX = np.array([7/15, 8/15, 0, 0.4, 0.2, 0.4, 0, 8/15, 7/15])
-PIMATRIX = PIMATRIX.reshape(ZSHOCKS, ZSHOCKS)
-
 
 # Probability of having discrete earnings shock
 ZDISTRIBUTION = [0.3, 0.4, 0.3]

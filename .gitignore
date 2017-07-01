@@ -1,6 +1,5 @@
 # Ignore
 
-*.csv
 .DS_Store
 .idea
 .ipynb_checkpoints

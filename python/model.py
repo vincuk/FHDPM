@@ -6,8 +6,8 @@ from multiprocessing import Pool, cpu_count
 from python.earnings import earnings_constants
 from python.parameters import JOBS, CRITERION, MAXITERATIONS, \
                        AUGMA, NBA, AMIN, AMAX, AUGMH, NBH, HMIN, HMAX
-from python.constants import BETA, R, IOTA, TAU, ZSHOCKS, z_shock_range, pp_range, o_range
-from python.distributions import PIMATRIX
+from python.constants import BETA, R, IOTA, TAU, ZSHOCKS, pp_range, o_range
+from python.rouwen import rouwen
 
 class Model:
     '''
@@ -30,22 +30,13 @@ class Model:
         :param int nb_h: Number of hours worked points in the grid
         :param float augm_h: Maximum hours worked per year
         '''
-        (self.PSI, self.CHI) = (psi, chi)
-        
-        (self.AMIN, self.AMAX, self.NBA) = (a_min, a_max, nb_a)
-        (self.HMIN, self.HMAX, self.NBH) = (h_min, h_max, nb_h)
+        self.silent = True
+        self.bond = [0.2, 0.2]
+        self.PSI, self.CHI = (psi, chi)
         self.AUGMA = augm_a
         self.AUGMH = augm_h
-        
-        if self.NBA > 1:
-            self.DELTAA = (self.AMAX - self.AMIN) / (self.NBA - 1)     
-        else:
-            self.DELTAA = 1
-        if self.NBH > 1:
-            self.DELTAH = (self.HMAX - self.HMIN) / (self.NBH - 1)     
-        else:
-            self.DELTAH = 1
-        
+        self.AMIN, self.AMAX, self.NBA = (a_min, a_max, nb_a)
+        self.HMIN, self.HMAX, self.NBH = (h_min, h_max, nb_h)
         self.JOBS = JOBS
         self.CRITERION = CRITERION
         self.MAXITERATIONS = MAXITERATIONS
@@ -57,24 +48,31 @@ class Model:
         self.z_shock_range = z_shock_range
         self.pp_range = pp_range
         self.o_range = o_range
-        self.PIMATRIX = PIMATRIX
-        
+        self.PIMATRIX, self.z_shock_range = rouwen(0.9, 0, 1/3, 3)
         self.WAGECONSTANT = earnings_constants[group]['WAGECONSTANT']
         self.ALPHA = earnings_constants[group]['ALPHA']
         self.ZETA = earnings_constants[group]['ZETA']
         self.GAMMA = earnings_constants[group]['GAMMA']
         self.XI = earnings_constants[group]['XI']
-        
-        self.a_grid = np.linspace(AMIN, AMAX, NBA)
-        self.h_grid = np.linspace(HMIN, HMAX, NBH)
-        
+        self.updade_parameters()
+
+    def updade_parameters(self):
+        if self.NBA > 1:
+            self.DELTAA = (self.AMAX - self.AMIN) / (self.NBA - 1)     
+        else:
+            self.DELTAA = 1
+        if self.NBH > 1:
+            self.DELTAH = (self.HMAX - self.HMIN) / (self.NBH - 1)     
+        else:
+            self.DELTAH = 1
+        self.a_grid = np.linspace(self.AMIN, self.AMAX, self.NBA)
+        self.h_grid = np.linspace(self.HMIN, self.HMAX, self.NBH)        
         self._size = len(self.pp_range)*len(self.o_range)*self.JOBS
         self._full_size = self.NBA*self.NBH
-
-        dr = np.ones( (self.NBA*self.NBH, self.ZSHOCKS), dtype=int )
-        v = np.zeros( (self.NBA*self.NBH, self.ZSHOCKS), dtype=float )
+        dr = np.ones( (self._full_size, self.ZSHOCKS), dtype=int )
+        v = np.zeros( (self._full_size, self.ZSHOCKS), dtype=float )
         self.v = [v] * ( self._size )
-        self.dr = [dr] * ( self._size )    
+        self.dr = [dr] * ( self._size )   
     
     def wage(self, j, pp, h, h_cum, o, z_shock):
         '''
@@ -136,11 +134,11 @@ class Model:
         :param bool o: True = changed job, False = kept job
         :param int z_shock: z-shock index
         '''
-        if h == self.HMAX:
-            _h = 0.5*self.AUGMH
+        if h > self.HMAX - self.bond[0]*self.AUGMH:
+            _h = self.bond[1]*self.AUGMH
         else:
             _h = h_prime - h
-        return self.wage(j, pp, _h, h, o, z_shock_range[z_shock])
+        return self.wage(j, pp, _h, h, o, self.z_shock_range[z_shock])
 
     def grid_consumption(self, j, pp, h_prime, h, a_prime, a, o, z_shock):
         '''
@@ -174,9 +172,9 @@ class Model:
         :param float c: consumption on grid
         :param float l: labor supply on grid
         '''
-        return self.CHI*(c**(1-self.IOTA))/(1-self.IOTA) / 400 - \
-               (1 - self.CHI)*(l**(1+self.PSI))/(1+self.PSI)
-        
+        _c = c
+        return (_c**(1-self.IOTA))/(1-self.IOTA) - \
+               self.CHI*(l**(1+self.PSI))/(1+self.PSI)
         
     def utility_matrix(self, index):
         (pp, j, o) = self.map_from_index(index)
@@ -194,21 +192,20 @@ class Model:
                                 continue
                             _c = self.grid_consumption(j, pp, h_end, h_start, 
                                                  a_end, a_start, o, z_shock);
-                            if _c < 0:
+                            if _c <= 0:
                                 continue
-                            _l = self.grid_labor(h_end, h_start)
+                            if h_start > self.HMAX - self.bond[0]*self.AUGMH:
+                                _l = self.bond[1]
+                            else:
+                                _l = self.grid_labor(h_end, h_start)
                             _idx_1 = self.map_from_grid(a_start, h_start)
                             _idx_2 = self.map_from_grid(a_end, h_end)
                             _temp_um[_idx_1, _idx_2, z_shock] = \
                                      self.utility(_c, _l)
-        print("Matrix: {0:2d}; Utility matrix calculated".format(index))
+        if not self.silent:
+            print("Matrix: {0:2d}; Utility matrix calculated.".format(index))
         return _temp_um
 
-    def map_from_grid(self, a, h):
-        a_idx = int(round((a - self.AMIN) / self.DELTAA))
-        h_idx = int(round((h - self.HMIN) / self.DELTAH))
-        return a_idx + h_idx*self.NBA
-        
     def iterate_model(self, index):
         _matrix_size = self._full_size*self.ZSHOCKS
         _temp_u0 = np.zeros((_matrix_size), dtype=float)
@@ -232,8 +229,6 @@ class Model:
                         util[i, _dr[i, z_shock], z_shock]
                 _Q[z_shock*self._full_size:(z_shock + 1)*self._full_size, :] = \
                         sp.kron(self.PIMATRIX[:, z_shock], _Q0)            
-
-                # _temp_u0 += np.euler_gamma
             _solution = spsolve( 
                                (sp.eye(_matrix_size) - self.BETA*_Q), _temp_u0 
                         )
@@ -242,7 +237,8 @@ class Model:
             _iteration +=1
             self.v[index] = _temp_v
             self.dr[index] = _dr
-        print("Matrix: {0:2d}; Iteration: {1:2d}; Distance: {2:d}".
+        if not self.silent:
+            print("Matrix: {0:2d}; Iteration: {1:2d}; Distance: {2:d}".
                 format(index, _iteration, _distance))
         if _iteration == self.MAXITERATIONS:
             print("Max number of iterations reached!")
@@ -259,29 +255,6 @@ class Model:
         for i in range(self._size):
             (self.dr[i], self.v[i]) = res[i].get()
     
-    def save_to_csv(self, fn):
-        '''
-        Save results to files
-        '''
-        _size = self._size * self._full_size
-        _df = pd.DataFrame(np.array(self.dr).reshape(_size, self.ZSHOCKS),
-                                columns=z_shock_range)
-        _df.to_csv("data/dr-" + str(fn) + ".csv")
-        _df = pd.DataFrame(np.array(self.v).reshape(_size, self.ZSHOCKS),
-                                columns=z_shock_range)
-        _df.to_csv("data/v-" + str(fn) + ".csv")
-        
-    def load_from_csv(self, fn):
-        '''
-        Load results from files
-        '''
-        _df = pd.read_csv("data/dr-" + str(fn) + ".csv", index_col=0)
-        self.dr = _df.as_matrix().reshape(self._size, 
-                            self._full_size, self.ZSHOCKS)
-        _df = pd.read_csv("data/v-" + str(fn) + ".csv", index_col=0)
-        self.v = _df.as_matrix().reshape(self._size, 
-                            self._full_size, self.ZSHOCKS)
-                            
     def map_to_index(self, pp, j, o):
         '''
         Return state index
@@ -318,3 +291,31 @@ class Model:
                 _j = (index % (len(self.o_range)*self.JOBS) - 1) // len(self.o_range)
         _pp = index // (len(self.o_range)*self.JOBS)
         return (_pp, _j, _o)
+        
+    def map_from_grid(self, a, h):
+        a_idx = int(round((a - self.AMIN) / self.DELTAA))
+        h_idx = int(round((h - self.HMIN) / self.DELTAH))
+        return a_idx + h_idx*self.NBA
+    
+    def save_to_csv(self, fn):
+        '''
+        Save results to files
+        '''
+        _size = self._size * self._full_size
+        _df = pd.DataFrame(np.array(self.dr).reshape(_size, self.ZSHOCKS),
+                                columns=z_shock_range)
+        _df.to_csv("data/dr-" + str(fn) + ".csv")
+        _df = pd.DataFrame(np.array(self.v).reshape(_size, self.ZSHOCKS),
+                                columns=z_shock_range)
+        _df.to_csv("data/v-" + str(fn) + ".csv")
+        
+    def load_from_csv(self, fn):
+        '''
+        Load results from files
+        '''
+        _df = pd.read_csv("data/dr-" + str(fn) + ".csv", index_col=0)
+        self.dr = _df.as_matrix().reshape(self._size, 
+                            self._full_size, self.ZSHOCKS)
+        _df = pd.read_csv("data/v-" + str(fn) + ".csv", index_col=0)
+        self.v = _df.as_matrix().reshape(self._size, 
+                            self._full_size, self.ZSHOCKS)
