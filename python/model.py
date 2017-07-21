@@ -254,7 +254,11 @@ class Model:
                                                 for i in range(self._size)]
         for i in range(self._size):
             (self.dr[i], self.v[i]) = res[i].get()
-    
+        
+        pool.close()
+        pool.terminate()
+        pool.join()
+        
     def map_to_index(self, pp, j, o):
         '''
         Return state index
