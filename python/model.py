@@ -1,10 +1,13 @@
 import numpy as np
+import pandas as pd
 import scipy.sparse as sp
 from scipy.sparse.linalg import spsolve
-import pandas as pd
+
 from multiprocessing import Pool, cpu_count
 from python.earnings import earnings_constants
-from python.parameters import JOBS, CRITERION, MAXITERATIONS, \
+from python.utility import utility_constants
+from python.distributions import ZDISTRIBUTION
+from python.parameters import JOBS, CRITERION, MAXITERATIONS, CMAX, \
                        AUGMA, NBA, AMIN, AMAX, AUGMH, NBH, HMIN, HMAX
 from python.constants import BETA, R, IOTA, TAU, ZSHOCKS, pp_range, o_range
 from python.rouwen import rouwen
@@ -14,9 +17,7 @@ class Model:
     Model
     '''
 
-    def __init__(self, psi, chi, group,
-                    a_min=AMIN, a_max=AMAX, nb_a=NBA, augm_a=AUGMA,
-                    h_min=HMIN, h_max=HMAX, nb_h=NBH, augm_h=AUGMH):
+    def __init__(self, group):
         '''
         :param float psi: Labor supply elasticity
         :param float chi: Disutility of labor supply
@@ -31,29 +32,32 @@ class Model:
         :param float augm_h: Maximum hours worked per year
         '''
         self.silent = True
-        self.bond = [0.2, 0.2]
-        self.PSI, self.CHI = (psi, chi)
-        self.AUGMA = augm_a
-        self.AUGMH = augm_h
-        self.AMIN, self.AMAX, self.NBA = (a_min, a_max, nb_a)
-        self.HMIN, self.HMAX, self.NBH = (h_min, h_max, nb_h)
+        self.bond = [0.16, 0.15, 0.01]
+        self.PSI = utility_constants['PSI']
+        self.CHI = utility_constants['CHI']
+        self.AUGMA = AUGMA
+        self.AUGMH = AUGMH
+        self.AMIN, self.AMAX, self.NBA = (AMIN, AMAX, NBA)
+        self.HMIN, self.HMAX, self.NBH = (HMIN, HMAX, NBH)
         self.JOBS = JOBS
+        self.TM = pd.read_csv("data/transition_probs.csv", index_col=0).as_matrix()[:,2:]
         self.CRITERION = CRITERION
         self.MAXITERATIONS = MAXITERATIONS
+        self.CMAX = CMAX
         self.BETA = BETA
         self.R =  R
         self.IOTA = IOTA
         self.TAU = TAU
         self.ZSHOCKS = ZSHOCKS
-        self.z_shock_range = z_shock_range
         self.pp_range = pp_range
         self.o_range = o_range
-        self.PIMATRIX, self.z_shock_range = rouwen(0.9, 0, 1/3, 3)
+        self.PIMATRIX, self.z_shock_range = rouwen(0.6, 0, 0.1, 3)
         self.WAGECONSTANT = earnings_constants[group]['WAGECONSTANT']
         self.ALPHA = earnings_constants[group]['ALPHA']
         self.ZETA = earnings_constants[group]['ZETA']
         self.GAMMA = earnings_constants[group]['GAMMA']
         self.XI = earnings_constants[group]['XI']
+        self.ZDISTRIBUTION = ZDISTRIBUTION
         self.updade_parameters()
 
     def updade_parameters(self):
@@ -165,16 +169,16 @@ class Model:
         '''
         return self.labor(h_prime, h) / self.AUGMH
         
-    def utility(self, c, l):
+    def utility(self, c, l, pp):
         '''
         Utility function on grid
 
         :param float c: consumption on grid
         :param float l: labor supply on grid
         '''
-        _c = c
+        _c = c / self.CMAX
         return (_c**(1-self.IOTA))/(1-self.IOTA) - \
-               self.CHI*(l**(1+self.PSI))/(1+self.PSI)
+               self.CHI[pp]*(l**(1+self.PSI))/(1+self.PSI)
         
     def utility_matrix(self, index):
         (pp, j, o) = self.map_from_index(index)
@@ -195,13 +199,13 @@ class Model:
                             if _c <= 0:
                                 continue
                             if h_start > self.HMAX - self.bond[0]*self.AUGMH:
-                                _l = self.bond[1]
+                                _l = self.bond[1] + pp*self.bond[2]
                             else:
                                 _l = self.grid_labor(h_end, h_start)
                             _idx_1 = self.map_from_grid(a_start, h_start)
                             _idx_2 = self.map_from_grid(a_end, h_end)
                             _temp_um[_idx_1, _idx_2, z_shock] = \
-                                     self.utility(_c, _l)
+                                     self.utility(_c, _l, pp)
         if not self.silent:
             print("Matrix: {0:2d}; Utility matrix calculated.".format(index))
         return _temp_um
@@ -307,19 +311,19 @@ class Model:
         '''
         _size = self._size * self._full_size
         _df = pd.DataFrame(np.array(self.dr).reshape(_size, self.ZSHOCKS),
-                                columns=z_shock_range)
-        _df.to_csv("data/dr-" + str(fn) + ".csv")
+                                columns=self.z_shock_range)
+        _df.to_csv("data/dr-" + fn + ".csv")
         _df = pd.DataFrame(np.array(self.v).reshape(_size, self.ZSHOCKS),
-                                columns=z_shock_range)
-        _df.to_csv("data/v-" + str(fn) + ".csv")
+                                columns=self.z_shock_range)
+        _df.to_csv("data/v-" + fn + ".csv")
         
     def load_from_csv(self, fn):
         '''
         Load results from files
         '''
-        _df = pd.read_csv("data/dr-" + str(fn) + ".csv", index_col=0)
+        _df = pd.read_csv("data/dr-" + fn + ".csv", index_col=0)
         self.dr = _df.as_matrix().reshape(self._size, 
                             self._full_size, self.ZSHOCKS)
-        _df = pd.read_csv("data/v-" + str(fn) + ".csv", index_col=0)
+        _df = pd.read_csv("data/v-" + fn + ".csv", index_col=0)
         self.v = _df.as_matrix().reshape(self._size, 
                             self._full_size, self.ZSHOCKS)

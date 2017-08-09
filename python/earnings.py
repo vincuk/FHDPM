@@ -1,4 +1,4 @@
-# Parameters earnings function:
+# Parameters of the earnings function:
 
 # WAGECONSTAN: Utility of being employed
 # ALPHA: Performance pay premium
@@ -7,6 +7,16 @@
 # XI: Depreciation of human capital
 
 earnings_constants = [
+
+    # ALL
+    dict(  
+        WAGECONSTANT = 6.7,
+        ALPHA = -0.05,
+        ZETA= [0, -.11, -.18, -.08, -.14, -.19, -.10, -.21, -.25],
+        GAMMA = [0.65, 0.02, 0.04],
+        XI = -0.04   
+    ),
+
     # Group 1
     dict(  
         WAGECONSTANT= 2.52, 
@@ -32,14 +42,5 @@ earnings_constants = [
         ZETA= [0, -.28, -.51, -.28, -.45, -.55, -.31, -.68, -.75],
         GAMMA= [0.61, 0.15, 0.0], 
         XI= -0.02
-    ),
-    
-    # ALL
-    dict(  
-        WAGECONSTANT= 3.29, 
-        ALPHA= 0.143,
-        ZETA= [0, -0.31, -0.57, -0.28, -0.41, -0.55, -0.35, -0.63, -0.80],
-        GAMMA= [0.758, 0.191, 0], 
-        XI= -0.107
     )
 ]
